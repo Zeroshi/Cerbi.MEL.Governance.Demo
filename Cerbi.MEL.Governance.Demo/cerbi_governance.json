@@ -1,0 +1,43 @@
+﻿{
+  // ──────────────────────────────────────────────────────────────────────────────
+  // (A) CerbiGovernance section tells Cerbi where to find its rules & default topic
+  // ──────────────────────────────────────────────────────────────────────────────
+  "CerbiGovernance": {
+    // If a class or method lacks [CerbiTopic("…")], Cerbi will fall back to "Orders"
+    "DefaultTopic": "Orders",
+
+    // Enable or disable Cerbi governance at runtime
+    "Enabled": true,
+
+    // Point Cerbi at this very file so it can read "EnforcementMode" & "LoggingProfiles"
+    "ConfigPath": "cerbi_governance.json"
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // (B) Cerbi MEL Governance rules live at the root of this file
+  // ──────────────────────────────────────────────────────────────────────────────
+  "EnforcementMode": "Strict",
+
+  "LoggingProfiles": {
+    "Orders": {
+      "RequireTopic": true,
+      "AllowedTopics": [ "Orders" ],
+      "FieldSeverities": {
+        "userId": "Required",
+        "email": "Required",
+        "password": "Forbidden"
+      },
+      "AllowRelax": true
+    },
+    "Payments": {
+      "RequireTopic": true,
+      "AllowedTopics": [ "Payments" ],
+      "FieldSeverities": {
+        "accountNumber": "Required",
+        "amount": "Required"
+      },
+      "AllowRelax": false
+    }
+    // You can add additional profiles (topics) here at any time.
+  }
+}

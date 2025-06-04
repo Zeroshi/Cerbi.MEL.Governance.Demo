@@ -1,13 +1,13 @@
-﻿using Cerbi;                         // <-- AddCerbiGovernance lives here
+﻿using Cerbi;                  // for AddCerbiGovernance, CerbiTopicAttribute
 using CerbiMelGovernanceDemo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Console;
 using System;
 using System.Threading.Tasks;
+using YourDemoNamespace;     // for OrderService, PaymentService
 
-namespace CerbiMelGovernanceDemo
+namespace YourDemoNamespace
 {
     internal class Program
     {
@@ -19,33 +19,20 @@ namespace CerbiMelGovernanceDemo
             using var host = Host.CreateDefaultBuilder(args)
                 .ConfigureLogging(logging =>
                 {
+                    // Remove all built‐in providers:
                     logging.ClearProviders();
 
-                    // 1) Register a console sink:
-                    logging.AddSimpleConsole(options =>
-                    {
-                        options.IncludeScopes = true;
-                        options.SingleLine = true;
-                        options.TimestampFormat = "HH:mm:ss ";
-                    });
-
-                    // 2) Force‐register the ConsoleLoggerProvider in DI so Cerbi can wrap it:
-                    logging.Services.AddSingleton<ConsoleLoggerProvider>();
-
-                    Console.WriteLine("▶▶ Calling AddCerbiGovernance");
-
-                    // 3) Now hook in Cerbi governance around that same console sink:
+                    // Now register exactly one console + wrap it in Cerbi:
                     logging.AddCerbiGovernance(opts =>
                     {
-                        // NOTE: 'DefaultTopic' was renamed to 'Profile' in v1.0.28
-                        opts.Profile = "Orders";
+                        opts.Profile = "Orders";               // fallback if no [CerbiTopic]
                         opts.ConfigPath = "cerbi_governance.json";
                         opts.Enabled = true;
                     });
                 })
                 .ConfigureServices(services =>
                 {
-                    // Register your demo services:
+                    // Register your demo services that have [CerbiTopic]:
                     services.AddTransient<OrderService>();
                     services.AddTransient<PaymentService>();
                 })

@@ -1,37 +1,43 @@
 ﻿# Cerbi.MEL.Governance Demo
 
-A simple console application that demonstrates how to wire up [**Cerbi.MEL.Governance**](https://www.nuget.org/packages/Cerbi.MEL.Governance) into a .NET 8.0 project with Microsoft.Extensions.Logging. It shows:
+A simple .NET 8.0 console application that demonstrates how to wire up [**Cerbi.MEL.Governance**](https://www.nuget.org/packages/Cerbi.MEL.Governance) into a real `Microsoft.Extensions.Logging` pipeline.
 
-* How to register and configure the Cerbi governance logger.
-* How to define governance rules in JSON.
-* How violations are detected and logged as a second console line only when they occur.
+This demo shows:
+
+- How to register and configure the Cerbi governance logger.
+- How to define governance rules in JSON.
+- How violations are detected and logged as a **second console line only when they occur**.
+- How topics (`Orders`, `Payments`) are routed via `[CerbiTopic]`.
+
+It’s intentionally small and focused so you can copy/paste patterns into ASP.NET Core, Worker Services, Azure Functions, or any MEL-based app—even if you’re already using Serilog, NLog, OpenTelemetry, Seq, Loki, ELK/OpenSearch, etc.
 
 ---
 
 ## 📂 Prerequisites
 
-* [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-* A terminal or IDE (e.g., Visual Studio, VS Code) capable of building and running .NET console apps.
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)  
+- A terminal or IDE (Visual Studio, VS Code, Rider, etc.) that can build and run .NET console apps.
 
 ---
 
 ## 🚀 Getting Started
 
-1. **Clone this repository:**
+1. **Clone the repository**
 
    ```bash
    git clone https://github.com/Zeroshi/Cerbi.MEL.Governance.git
    cd Cerbi.MEL.Governance/Demo
-   ```
+````
 
-2. **Restore NuGet packages:**
+2. **Restore NuGet packages**
 
    ```bash
    dotnet restore
    ```
 
 3. **Create a governance configuration file**
-   In the `Demo` folder, create a file named `cerbi_governance.json` with the following contents:
+
+   In the `Demo` folder, create `cerbi_governance.json` with:
 
    ```json
    {
@@ -39,7 +45,7 @@ A simple console application that demonstrates how to wire up [**Cerbi.MEL.Gover
      "LoggingProfiles": {
        "Orders": {
          "RequireTopic": true,
-         "AllowedTopics": ["Orders"],
+         "AllowedTopics": [ "Orders" ],
          "FieldSeverities": {
            "userId": "Required",
            "email": "Required",
@@ -49,7 +55,7 @@ A simple console application that demonstrates how to wire up [**Cerbi.MEL.Gover
        },
        "Payments": {
          "RequireTopic": true,
-         "AllowedTopics": ["Payments"],
+         "AllowedTopics": [ "Payments" ],
          "FieldSeverities": {
            "accountNumber": "Required",
            "amount": "Required"
@@ -60,11 +66,14 @@ A simple console application that demonstrates how to wire up [**Cerbi.MEL.Gover
    }
    ```
 
-   > * **Note:**
-   >   • This demo version emits an extra JSON payload only when a violation occurs.
-   >   • Future releases will continue to emit a second line only on violations; no extra logging when rules pass.
+   > **Notes for this demo (v1.0.36):**
+   >
+   > * The **original console log line is always written**.
+   > * An extra JSON payload is emitted **only when there is a governance violation**.
+   > * The underlying package has **no fluent `Relax()` helper**; this demo does not use Relax at all.
+   > * `AllowRelax` is configured for `Orders` but `Relax` is never passed, so `GovernanceRelaxed` remains `false`.
 
-4. **Build and run the demo:**
+4. **Build and run the demo**
 
    ```bash
    dotnet run --project Cerbi.MEL.Governance.Demo.csproj
@@ -74,74 +83,102 @@ A simple console application that demonstrates how to wire up [**Cerbi.MEL.Gover
 
 ## 🛠 How It Works
 
-1. **Program.cs**
-   The demo’s `Program.cs` uses `Host.CreateDefaultBuilder` to configure logging:
+### 1. Program.cs – Host & logging setup
 
-   ```csharp
-   Host.CreateDefaultBuilder(args)
-       .ConfigureLogging(logging =>
-       {
-           logging.ClearProviders();
+The demo uses `Host.CreateDefaultBuilder` to configure MEL and then wraps the console logger with Cerbi governance:
 
-           // 1) Add the built‑in simple console sink:
-           logging.AddSimpleConsole(options =>
-           {
-               options.IncludeScopes   = true;
-               options.SingleLine      = true;
-               options.TimestampFormat = "HH:mm:ss ";
-           });
+```csharp
+Host.CreateDefaultBuilder(args)
+    .ConfigureLogging(logging =>
+    {
+        logging.ClearProviders();
 
-           // 2) Force‑register the ConsoleLoggerProvider in DI so Cerbi can wrap it:
-           logging.Services.AddSingleton<ConsoleLoggerProvider>();
+        // 1) Add the built-in simple console sink:
+        logging.AddSimpleConsole(options =>
+        {
+            options.IncludeScopes   = true;
+            options.SingleLine      = true;
+            options.TimestampFormat = "HH:mm:ss ";
+        });
 
-           Console.WriteLine("▶▶ Calling AddCerbiGovernance");
+        // 2) Force-register ConsoleLoggerProvider in DI so Cerbi can wrap it:
+        logging.Services.AddSingleton<ConsoleLoggerProvider>();
 
-           // 3) Wrap the console sink in Cerbi governance:
-           logging.AddCerbiGovernance(opts =>
-           {
-               opts.Profile    = "Orders";                    // default fallback topic
-               opts.ConfigPath = "cerbi_governance.json";
-               opts.Enabled    = true;                          // enable runtime verification
-           });
-       })
-       .ConfigureServices(services =>
-       {
-           services.AddTransient<OrderService>();
-           services.AddTransient<PaymentService>();
-       })
-       .Build();
-   ```
+        Console.WriteLine("▶▶ Calling AddCerbiGovernance");
 
-2. **OrderService & PaymentService**
+        // 3) Wrap the console sink in Cerbi governance:
+        logging.AddCerbiGovernance(opts =>
+        {
+            opts.Profile    = "Orders";                 // default fallback profile
+            opts.ConfigPath = "cerbi_governance.json";  // governance JSON path
+            opts.Enabled    = true;                     // enable runtime verification
+        });
+    })
+    .ConfigureServices(services =>
+    {
+        services.AddTransient<OrderService>();
+        services.AddTransient<PaymentService>();
+    })
+    .Build();
+```
 
-   * Each class is decorated with `[CerbiTopic("Orders")]` or `[CerbiTopic("Payments")]`.
-   * Methods log structured messages containing fields (e.g., `userId`, `email`, `password`, `accountNumber`, `amount`).
-   * Cerbi’s runtime validator inspects each log entry:
+The important part is:
 
-     * If a required field is missing or a forbidden field appears, a violation is flagged.
-     * Only when a violation is detected does the demo emit a second JSON line with violation details.
+* `AddSimpleConsole` provides a normal console sink.
+* `AddCerbiGovernance` wraps that sink and applies rules from `cerbi_governance.json` using the runtime validator.
 
-3. **Cerbi.MEL.Governance Behavior**
-   When `_logger.LogInformation("…", …)` is called, Cerbi.MEL.Governance:
+---
 
-   1. Extracts structured fields from the log state.
-   2. Injects a `CerbiTopic` field (from the `[CerbiTopic]` attribute or fallback `opts.Profile`).
-   3. Applies governance rules defined in `cerbi_governance.json` via the `RuntimeGovernanceValidator`.
-   4. If violations exist, it serializes a JSON payload containing:
+### 2. OrderService & PaymentService – Topic-based profiles
 
-      * `GovernanceProfileUsed` (the profile name)
-      * `GovernanceViolations` (array of violation codes, e.g., `MissingField:userId`, `ForbiddenField:password`)
-      * `GovernanceRelaxed` (always `false` in this demo)
-   5. Logs that JSON payload as a second console line.
-      If no violations occur, only the original message is emitted.
+* `OrderService` is decorated with `[CerbiTopic("Orders")]`.
+* `PaymentService` is decorated with `[CerbiTopic("Payments")]`.
+
+Each service logs structured messages:
+
+* `OrderService` emits:
+
+  * A valid log (all required fields).
+  * A log **missing** a required field (`userId`).
+  * A log containing a **forbidden** field (`password`).
+
+* `PaymentService` emits:
+
+  * A valid payment log (`accountNumber`, `amount`) under the `Payments` profile.
+
+Cerbi uses:
+
+1. `[CerbiTopic]` to determine which profile (`Orders` / `Payments`) to apply.
+2. The JSON profile to enforce `FieldSeverities` and `RequireTopic`.
+
+---
+
+### 3. Cerbi.MEL.Governance behavior in the demo
+
+When `_logger.LogInformation("…", …)` is called:
+
+1. Cerbi extracts structured fields from the logging state.
+2. It injects `CerbiTopic` using the `[CerbiTopic]` attribute (or fallback `opts.Profile`).
+3. It runs the `RuntimeGovernanceValidator` from `Cerbi.Governance.Runtime` using `cerbi_governance.json`.
+4. If the event is compliant, governance metadata is added and logged as JSON (in this demo, you’ll see a second line even for some valid cases).
+5. If violations exist, the JSON payload includes:
+
+   * `GovernanceProfileUsed`
+   * `GovernanceViolations` (e.g., `MissingField:userId`, `ForbiddenField:password`)
+   * `GovernanceRelaxed` (always `false` in this demo)
+
+In all cases:
+
+* The **original human-readable console message** is printed.
+* A structured JSON line is printed to show what Cerbi sees and enforces.
 
 ---
 
 ## 🔍 Sample Output
 
-After running the demo, you’ll see output similar to:
+Running the demo produces output similar to:
 
-```
+```text
 ▶▶ Starting Demo.Main
 ▶▶ Calling AddCerbiGovernance
 ▶▶ Resolving OrderService
@@ -161,46 +198,72 @@ After running the demo, you’ll see output similar to:
 ▶▶ Demo finished. Press any key to exit.
 ```
 
-* When a log entry fully complies, you see a JSON line with enforcement details.
-* When a violation occurs (missing or forbidden field), you see a JSON line showing the violation list.
+Key points:
+
+* Compliant events include `GovernanceProfileUsed` and enforcement/Mode metadata.
+* Violations include `GovernanceViolations` and `GovernanceRelaxed:false`.
+* The original line is **never** suppressed.
 
 ---
 
 ## 📚 Demo Structure
 
-```
+```text
 /Demo
  ├─ Program.cs
  ├─ OrderService.cs
  ├─ PaymentService.cs
  ├─ cerbi_governance.json
  ├─ Cerbi.MEL.Governance.Demo.csproj
- └─ README.md          ← (this file)
+ └─ README.md   ← this file
 ```
 
-* **Program.cs**: Host configuration, DI, and logging setup.
-* **OrderService.cs**: Emits three log scenarios—valid, missing required field, forbidden field.
-* **PaymentService.cs**: Emits a payment log scenario (valid).
-* **cerbi\_governance.json**: Defines governance rules for `Orders` and `Payments` profiles.
+* **Program.cs** – Host, DI, logging configuration, `AddCerbiGovernance`.
+* **OrderService.cs** – Logs valid + violating messages under `Orders`.
+* **PaymentService.cs** – Logs valid messages under `Payments`.
+* **cerbi_governance.json** – Governance profiles and rules.
+
+---
+
+## 🧩 How This Fits into the Ecosystem
+
+This demo is a thin wrapper around:
+
+* **Cerbi.MEL.Governance**
+  MEL integration and logger wrapping.
+
+* **Cerbi.Governance.Core**
+  Governance models, schema, and profile contracts.
+
+* **Cerbi.Governance.Runtime**
+  Runtime validator that checks logs against profiles.
+
+You can pair the same patterns with:
+
+* Serilog / NLog / Log4Net via MEL adapters.
+* OTEL Logging + OTLP exporters into the OpenTelemetry Collector.
+* Downstream systems like Seq, Loki, Fluentd/FluentBit, ELK/OpenSearch, Graylog, VictoriaLogs/VictoriaMetrics, or syslog/Journald.
+
+Cerbi governs the log content **before** it hits those systems.
 
 ---
 
 ## 🎯 Next Steps
 
-* This demo version logs an extra JSON payload only on violations.
-* Upcoming enhancements include a `Relax()` helper method for relaxed mode, minimizing manual field injection.
-* To extend the demo, add new profiles, add more services, or integrate with other sinks (file, Seq, etc.)—Cerbi.MEL.Governance works with any MEL‑compatible provider.
+* Change profiles in `cerbi_governance.json` and rerun to see different violations.
+* Add new services and topics (`[CerbiTopic("Billing")]`, etc.) and wire new profiles.
+* Point console output to file or other sinks and watch how governance metadata flows through.
+* Use this as a template for wiring Cerbi into a real ASP.NET Core or worker app.
 
 ---
 
 ## 🔗 Resources
 
-* **NuGet Package:** [Cerbi.MEL.Governance](https://www.nuget.org/packages/Cerbi.MEL.Governance)
-* **Demo & Examples:** [https://github.com/Zeroshi/Cerbi.MEL.Governance](https://github.com/Zeroshi/Cerbi.MEL.Governance)
-* **Cerbi Docs:** [https://cerbi.io](https://cerbi.io)
-* **Related Libraries:**
+* **NuGet:** [Cerbi.MEL.Governance](https://www.nuget.org/packages/Cerbi.MEL.Governance)
+* **Repo & Demo:** [https://github.com/Zeroshi/Cerbi.MEL.Governance](https://github.com/Zeroshi/Cerbi.MEL.Governance)
+* **Cerbi Docs & Suite Overview:** [https://cerbi.io](https://cerbi.io)
 
-  * [Cerbi.Governance.Core](https://www.nuget.org/packages/Cerbi.Governance.Core)
-  * [Cerbi.Governance.Runtime](https://www.nuget.org/packages/Cerbi.Governance.Runtime)
+**Related libraries:**
 
-> ℹ️ If you encounter any issues or have feedback, please open an issue on the [GitHub repository](https://github.com/Zeroshi/Cerbi.MEL.Governance/issues).
+* [Cerbi.Governance.Core](https://www.nuget.org/packages/Cerbi.Governance.Core)
+* [Cerbi.Governance.Runtime](https://www.nuget.org/packages/Cerbi.Governance.Runtime)

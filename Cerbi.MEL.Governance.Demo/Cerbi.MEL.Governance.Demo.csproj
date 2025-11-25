@@ -12,7 +12,7 @@
       We rely on the published NuGet package for Cerbi.MEL.Governance, 
       and ensure that our hosting & console‐sink versions match exactly:
     -->
-    <PackageReference Include="Cerbi.MEL.Governance" Version="1.0.35" />
+    <PackageReference Include="Cerbi.MEL.Governance" Version="1.0.42" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.5" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.5" />

@@ -66,7 +66,7 @@ It’s intentionally small and focused so you can copy/paste patterns into ASP.N
    }
    ```
 
-   > **Notes for this demo (v1.0.36):**
+   > **Notes for this demo (v1.0.42):**
    >
    > * The **original console log line is always written**.
    > * An extra JSON payload is emitted **only when there is a governance violation**.
